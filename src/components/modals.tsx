@@ -370,6 +370,9 @@ export function MenuModal({
   const [recipeId, setRecipeId] = useState(
     product?.recipeId || recipes[0]?.id || "",
   );
+  const [recipePortions, setRecipePortions] = useState(
+    String(product?.recipePortions || 1),
+  );
   const [ingredientId, setIngredientId] = useState(stocks[0]?.id || "");
   const selectedStock = stocks.find((stock) => stock.id === ingredientId);
   const [ingredientUnit, setIngredientUnit] = useState<IngredientUnit>(
@@ -380,41 +383,13 @@ export function MenuModal({
     product?.ingredients || [],
   );
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeId);
-  const recipeIngredients =
-    selectedRecipe?.ingredients.map((recipeIngredient) => {
-      const current = ingredients.find(
-        (ingredient) => ingredient.stockId === recipeIngredient.stockId,
-      );
-      const stock = stocks.find((item) => item.id === recipeIngredient.stockId);
-      return (
-        current || {
-          stockId: recipeIngredient.stockId,
-          quantity: 0,
-          unit: selectableUnits(stock)[0] || "gram",
-        }
-      );
-    }) || [];
-  const changeRecipe = (id: string) => {
-    setRecipeId(id);
-    const recipe = recipes.find((item) => item.id === id);
-    setIngredients(
-      recipe?.ingredients.map((recipeIngredient) => {
-        const stock = stocks.find(
-          (item) => item.id === recipeIngredient.stockId,
-        );
-        return {
-          stockId: recipeIngredient.stockId,
-          quantity: 0,
-          unit: selectableUnits(stock)[0] || "gram",
-        };
-      }) || [],
-    );
-  };
+
   const selectIngredient = (id: string) => {
     const stock = stocks.find((item) => item.id === id);
     setIngredientId(id);
     setIngredientUnit(selectableUnits(stock)[0] || "gram");
   };
+
   const addIngredient = () => {
     if (!ingredientId || !ingredientQty) return;
     setIngredients((current) => {
@@ -429,43 +404,43 @@ export function MenuModal({
     });
     setIngredientQty("");
   };
-  const updateIngredient = (
-    stockId: string,
-    field: "quantity" | "unit",
-    value: number | IngredientUnit,
-  ) =>
-    setIngredients((current) =>
-      current.map((ingredient) =>
-        ingredient.stockId === stockId
-          ? { ...ingredient, [field]: value }
-          : ingredient,
-      ),
-    );
+
   const save = () => {
+    const portions = Number(recipePortions);
     const finalIngredients =
-      source === "recipe" ? recipeIngredients : ingredients;
+      source === "recipe"
+        ? selectedRecipe?.ingredients.map((ingredient) => ({
+            ...ingredient,
+            quantity: ingredient.quantity * portions,
+          })) || []
+        : ingredients;
+
     if (
       !name ||
       !price ||
       !finalIngredients.length ||
       finalIngredients.some((ingredient) => ingredient.quantity <= 0)
-    )
+    ) {
       return;
+    }
+
     onSave({
       id: product?.id || crypto.randomUUID(),
       name,
       price: Number(price),
       recipeId: source === "recipe" ? recipeId : undefined,
+      recipePortions: source === "recipe" ? portions : undefined,
       ingredients: finalIngredients,
     });
   };
+
   return (
     <Modal title={product ? "Ubah menu" : "Buat menu baru"} onClose={onClose}>
       <div className="grid gap-4">
         <Field label="Nama menu">
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(event) => setName(event.target.value)}
             placeholder="Contoh: Bakso Telur"
           />
         </Field>
@@ -473,7 +448,7 @@ export function MenuModal({
           <input
             type="number"
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            onChange={(event) => setPrice(event.target.value)}
             placeholder="0"
           />
         </Field>
@@ -484,24 +459,33 @@ export function MenuModal({
           <div className="grid grid-cols-2 rounded-xl border border-line p-1 text-sm">
             <button
               onClick={() => setSource("recipe")}
-              className={`rounded-lg px-3 py-2 font-bold ${source === "recipe" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={
+                source === "recipe"
+                  ? "rounded-lg bg-moss px-3 py-2 font-bold text-white"
+                  : "rounded-lg px-3 py-2 font-bold text-slate-500"
+              }
             >
               Pakai resep
             </button>
             <button
               onClick={() => setSource("direct")}
-              className={`rounded-lg px-3 py-2 font-bold ${source === "direct" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={
+                source === "direct"
+                  ? "rounded-lg bg-moss px-3 py-2 font-bold text-white"
+                  : "rounded-lg px-3 py-2 font-bold text-slate-500"
+              }
             >
               Racik sendiri
             </button>
           </div>
         </div>
+
         {source === "recipe" ? (
           <div className="rounded-xl bg-slate-50 p-3">
             <Field label="Pilih resep">
               <select
                 value={recipeId}
-                onChange={(e) => changeRecipe(e.target.value)}
+                onChange={(event) => setRecipeId(event.target.value)}
               >
                 {recipes.map((recipe) => (
                   <option key={recipe.id} value={recipe.id}>
@@ -510,50 +494,19 @@ export function MenuModal({
                 ))}
               </select>
             </Field>
-            <p className="mb-2 mt-4 text-sm font-bold">
-              Takaran untuk menu ini
+            <Field label="Jumlah porsi resep untuk satu menu">
+              <input
+                type="number"
+                min="1"
+                value={recipePortions}
+                onChange={(event) => setRecipePortions(event.target.value)}
+                placeholder="1"
+              />
+            </Field>
+            <p className="mt-3 text-xs text-slate-500">
+              Takaran bahan mengikuti resep. Buat ubah gram atau satuan, edit
+              resepnya.
             </p>
-            {recipeIngredients.map((ingredient) => {
-              const stock = stocks.find(
-                (item) => item.id === ingredient.stockId,
-              );
-              return (
-                <div
-                  key={ingredient.stockId}
-                  className="mt-2 grid grid-cols-[1fr_80px_75px] items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm"
-                >
-                  <span>{stock?.name}</span>
-                  <input
-                    type="number"
-                    value={ingredient.quantity || ""}
-                    onChange={(e) =>
-                      updateIngredient(
-                        ingredient.stockId,
-                        "quantity",
-                        Number(e.target.value),
-                      )
-                    }
-                    placeholder="Jumlah"
-                    className="w-full rounded-md border border-line px-2 py-1.5"
-                  />
-                  <select
-                    value={recipeUnit(ingredient, stock)}
-                    onChange={(e) =>
-                      updateIngredient(
-                        ingredient.stockId,
-                        "unit",
-                        e.target.value as IngredientUnit,
-                      )
-                    }
-                    className="rounded-md border border-line bg-white px-2 py-1.5"
-                  >
-                    {selectableUnits(stock).map((unit) => (
-                      <option key={unit}>{unit}</option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
           </div>
         ) : (
           <div className="rounded-xl bg-slate-50 p-3">
@@ -561,7 +514,7 @@ export function MenuModal({
             <div className="grid grid-cols-[1fr_72px_72px_auto] gap-2">
               <select
                 value={ingredientId}
-                onChange={(e) => selectIngredient(e.target.value)}
+                onChange={(event) => selectIngredient(event.target.value)}
               >
                 {stocks.map((stock) => (
                   <option key={stock.id} value={stock.id}>
@@ -572,13 +525,13 @@ export function MenuModal({
               <input
                 type="number"
                 value={ingredientQty}
-                onChange={(e) => setIngredientQty(e.target.value)}
+                onChange={(event) => setIngredientQty(event.target.value)}
                 placeholder="Jumlah"
               />
               <select
                 value={ingredientUnit}
-                onChange={(e) =>
-                  setIngredientUnit(e.target.value as IngredientUnit)
+                onChange={(event) =>
+                  setIngredientUnit(event.target.value as IngredientUnit)
                 }
               >
                 {selectableUnits(selectedStock).map((unit) => (
@@ -594,9 +547,9 @@ export function MenuModal({
                 <Plus size={18} />
               </button>
             </div>
-            {ingredients.map((ingredient, idx) => (
+            {ingredients.map((ingredient) => (
               <div
-                key={`${ingredient.stockId}-${idx}`}
+                key={ingredient.stockId}
                 className="mt-2 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"
               >
                 <span>
@@ -616,7 +569,9 @@ export function MenuModal({
                   <button
                     onClick={() =>
                       setIngredients((current) =>
-                        current.filter((_, index) => index !== idx),
+                        current.filter(
+                          (item) => item.stockId !== ingredient.stockId,
+                        ),
                       )
                     }
                     className="text-rose-600"
@@ -651,28 +606,59 @@ export function RecipeModal({
     recipe?.category || "Makanan",
   );
   const [ingredientId, setIngredientId] = useState(stocks[0]?.id || "");
+  const selectedStock = stocks.find((stock) => stock.id === ingredientId);
+  const [ingredientQty, setIngredientQty] = useState("");
+  const [ingredientUnit, setIngredientUnit] = useState<IngredientUnit>(
+    selectableUnits(selectedStock)[0] || "gram",
+  );
   const [ingredients, setIngredients] = useState<Ingredient[]>(
     recipe?.ingredients || [],
   );
-  const addIngredient = () => {
-    if (!ingredientId) return;
-    const stock = stocks.find((item) => item.id === ingredientId);
-    if (
-      !stock ||
-      ingredients.some((ingredient) => ingredient.stockId === ingredientId)
-    )
-      return;
-    setIngredients((current) => [
-      ...current,
-      {
-        stockId: ingredientId,
-        quantity: 0,
-        unit: selectableUnits(stock)[0] || "gram",
-      },
-    ]);
+
+  const selectIngredient = (id: string) => {
+    const stock = stocks.find((item) => item.id === id);
+    setIngredientId(id);
+    setIngredientUnit(selectableUnits(stock)[0] || "gram");
   };
+
+  const addIngredient = () => {
+    if (!ingredientId || !ingredientQty) return;
+    const next = {
+      stockId: ingredientId,
+      quantity: Number(ingredientQty),
+      unit: ingredientUnit,
+    };
+    setIngredients((current) =>
+      current.some((ingredient) => ingredient.stockId === ingredientId)
+        ? current.map((ingredient) =>
+            ingredient.stockId === ingredientId ? next : ingredient,
+          )
+        : [...current, next],
+    );
+    setIngredientQty("");
+  };
+
+  const updateIngredient = (
+    stockId: string,
+    field: "quantity" | "unit",
+    value: number | IngredientUnit,
+  ) =>
+    setIngredients((current) =>
+      current.map((ingredient) =>
+        ingredient.stockId === stockId
+          ? { ...ingredient, [field]: value }
+          : ingredient,
+      ),
+    );
+
   const save = () => {
-    if (!name || !ingredients.length) return;
+    if (
+      !name ||
+      !ingredients.length ||
+      ingredients.some((ingredient) => ingredient.quantity <= 0)
+    ) {
+      return;
+    }
     onSave({
       id: recipe?.id || crypto.randomUUID(),
       name,
@@ -680,38 +666,59 @@ export function RecipeModal({
       ingredients,
     });
   };
+
   return (
     <Modal title={recipe ? "Ubah resep" : "Buat resep baru"} onClose={onClose}>
       <div className="grid gap-4">
         <Field label="Nama resep">
           <input
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(event) => setName(event.target.value)}
             placeholder="Contoh: Es Teh Manis"
           />
         </Field>
         <Field label="Jenis resep">
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value as Recipe["category"])}
+            onChange={(event) =>
+              setCategory(event.target.value as Recipe["category"])
+            }
           >
             <option>Makanan</option>
             <option>Minuman</option>
           </select>
         </Field>
         <div className="rounded-xl bg-slate-50 p-3">
-          <p className="mb-1 text-sm font-bold">Bahan dalam resep</p>
+          <p className="mb-1 text-sm font-bold">Bahan dan takaran resep</p>
           <p className="mb-3 text-xs text-slate-500">
-            Takaran diisi nanti saat bikin menu.
+            Takaran ini dihitung untuk satu porsi resep.
           </p>
-          <div className="grid grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-[1fr_72px_72px_auto] gap-2">
             <select
               value={ingredientId}
-              onChange={(e) => setIngredientId(e.target.value)}
+              onChange={(event) => selectIngredient(event.target.value)}
             >
               {stocks.map((stock) => (
                 <option key={stock.id} value={stock.id}>
                   {stock.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              value={ingredientQty}
+              onChange={(event) => setIngredientQty(event.target.value)}
+              placeholder="Jumlah"
+            />
+            <select
+              value={ingredientUnit}
+              onChange={(event) =>
+                setIngredientUnit(event.target.value as IngredientUnit)
+              }
+            >
+              {selectableUnits(selectedStock).map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
                 </option>
               ))}
             </select>
@@ -722,26 +729,58 @@ export function RecipeModal({
               <Plus size={18} />
             </button>
           </div>
-          {ingredients.map((ingredient, idx) => (
-            <div
-              key={`${ingredient.stockId}-${idx}`}
-              className="mt-2 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"
-            >
-              <span>
-                {stocks.find((stock) => stock.id === ingredient.stockId)?.name}
-              </span>
-              <button
-                onClick={() =>
-                  setIngredients((current) =>
-                    current.filter((_, index) => index !== idx),
-                  )
-                }
-                className="text-rose-600"
+          {ingredients.map((ingredient) => {
+            const stock = stocks.find((item) => item.id === ingredient.stockId);
+            return (
+              <div
+                key={ingredient.stockId}
+                className="mt-2 grid grid-cols-[1fr_72px_72px_auto] items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm"
               >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
+                <span>{stock?.name || "Bahan terhapus"}</span>
+                <input
+                  type="number"
+                  value={ingredient.quantity || ""}
+                  onChange={(event) =>
+                    updateIngredient(
+                      ingredient.stockId,
+                      "quantity",
+                      Number(event.target.value),
+                    )
+                  }
+                  className="w-full rounded-md border border-line px-2 py-1.5"
+                />
+                <select
+                  value={recipeUnit(ingredient, stock)}
+                  onChange={(event) =>
+                    updateIngredient(
+                      ingredient.stockId,
+                      "unit",
+                      event.target.value as IngredientUnit,
+                    )
+                  }
+                  className="rounded-md border border-line bg-white px-2 py-1.5"
+                >
+                  {selectableUnits(stock).map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() =>
+                    setIngredients((current) =>
+                      current.filter(
+                        (item) => item.stockId !== ingredient.stockId,
+                      ),
+                    )
+                  }
+                  className="text-rose-600"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            );
+          })}
         </div>
         <Button onClick={save}>
           {recipe ? "Simpan perubahan" : "Simpan resep"}

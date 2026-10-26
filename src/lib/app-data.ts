@@ -25,6 +25,7 @@ export type Product = {
   price: number;
   ingredients: Ingredient[];
   recipeId?: string;
+  recipePortions?: number;
 };
 export type Transaction = {
   id: string;
@@ -119,10 +120,10 @@ export const initialRecipes: Recipe[] = [
     name: "Resep 1",
     category: "Makanan",
     ingredients: [
-      { stockId: "bahan-1", quantity: 0, unit: "gram" },
-      { stockId: "bahan-2", quantity: 0, unit: "gram" },
-      { stockId: "bahan-3", quantity: 0, unit: "pcs" },
-      { stockId: "bahan-5", quantity: 0, unit: "pcs" },
+      { stockId: "bahan-1", quantity: 180, unit: "gram" },
+      { stockId: "bahan-2", quantity: 60, unit: "gram" },
+      { stockId: "bahan-3", quantity: 1, unit: "pcs" },
+      { stockId: "bahan-5", quantity: 1, unit: "pcs" },
     ],
   },
   {
@@ -130,9 +131,9 @@ export const initialRecipes: Recipe[] = [
     name: "Resep 2",
     category: "Makanan",
     ingredients: [
-      { stockId: "bahan-3", quantity: 0, unit: "pcs" },
-      { stockId: "bahan-4", quantity: 0, unit: "gram" },
-      { stockId: "bahan-5", quantity: 0, unit: "pcs" },
+      { stockId: "bahan-3", quantity: 1, unit: "pcs" },
+      { stockId: "bahan-4", quantity: 20, unit: "gram" },
+      { stockId: "bahan-5", quantity: 1, unit: "pcs" },
     ],
   },
 ];
@@ -142,6 +143,7 @@ export const initialProducts: Product[] = [
     name: "Menu 1",
     price: 15000,
     recipeId: "resep-1",
+    recipePortions: 1,
     ingredients: [
       { stockId: "bahan-1", quantity: 180, unit: "gram" },
       { stockId: "bahan-2", quantity: 60, unit: "gram" },
@@ -165,6 +167,7 @@ export const initialProducts: Product[] = [
     name: "Menu 3",
     price: 14000,
     recipeId: "resep-2",
+    recipePortions: 1,
     ingredients: [
       { stockId: "bahan-3", quantity: 1, unit: "pcs" },
       { stockId: "bahan-4", quantity: 20, unit: "gram" },

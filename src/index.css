@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1f2937;
+  --color-moss: #24715d;
+  --color-moss-dark: #175344;
+  --color-cream: #f8f7f2;
+  --color-line: #e8e8e3;
+  --font-sans: "DM Sans", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; background: var(--color-cream); color: var(--color-ink); }
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+input:focus, select:focus { outline: 2px solid #98c5b6; outline-offset: 1px; }
+@media print { .no-print { display: none !important; } body { background: white; } }

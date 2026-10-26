@@ -8,7 +8,6 @@ import {
   Menu as MenuIcon,
   Package,
   ShoppingBasket,
-  Smartphone,
   Wallet,
 } from "lucide-react";
 import {
@@ -250,21 +249,6 @@ function App() {
             />
           ))}
         </nav>
-        <div className="mt-auto m-4 rounded-xl bg-[#edf6f2] p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-moss">
-            <Smartphone size={17} /> Mode prototype
-          </div>
-          <p className="text-xs leading-5 text-slate-600">
-            Data tersimpan di perangkat ini. Sinkron antar HP siap disambung ke
-            server.
-          </p>
-          <button
-            onClick={() => setNotice("Kode demo: 2908")}
-            className="mt-3 text-xs font-bold text-moss hover:underline"
-          >
-            Lihat kode demo
-          </button>
-        </div>
       </aside>
       <main className="lg:ml-64">
         <header className="no-print sticky top-0 z-20 flex h-18 items-center justify-between border-b border-line bg-[#f8f7f2]/95 px-4 backdrop-blur sm:px-8">

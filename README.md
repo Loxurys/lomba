@@ -1,8 +1,4 @@
-# ini_nama
-
-Dashboard operasional untuk UMKM keluarga: stok bahan, menu dengan resep, kasir yang otomatis mengurangi stok, pembukuan, laporan, dan e-struk WhatsApp.
-
-## Jalanin
+# Jalanin
 
 ```bash
 npm install

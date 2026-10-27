@@ -397,7 +397,9 @@ export function MenuPage({
                 <p
                   className={`mt-3 w-fit rounded-full px-2.5 py-1 text-xs font-bold ${recipe ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}
                 >
-                  {recipe ? `Pakai resep: ${recipe.name}` : "Racik langsung"}
+                  {recipe
+                    ? `Pakai resep: ${recipe.name} · ${product.recipePortions || 1} porsi`
+                    : "Racik langsung"}
                 </p>
                 <div className="mt-5 border-t border-line pt-4">
                   <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
@@ -465,7 +467,13 @@ export function MenuPage({
                     key={ingredient.stockId}
                     className="py-1 text-sm font-medium text-slate-600"
                   >
-                    {getStock(ingredient.stockId)?.name || "Bahan terhapus"}
+                    <span>
+                      {getStock(ingredient.stockId)?.name || "Bahan terhapus"}
+                    </span>
+                    <span className="ml-2 font-semibold">
+                      {ingredient.quantity}{" "}
+                      {recipeUnit(ingredient, getStock(ingredient.stockId))}
+                    </span>
                   </div>
                 ))}
               </div>

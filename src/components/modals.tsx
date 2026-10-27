@@ -9,6 +9,7 @@ import type {
   Transaction,
 } from "../lib/app-data";
 import { recipeUnit, rupiah, selectableUnits } from "../lib/app-data";
+import { makeAccessCode, normalizeAccessCode } from "../lib/remote-store";
 import { Button, Field, Modal } from "./ui";
 
 export function StockModal({
@@ -891,6 +892,58 @@ export function ReceiptModal({
           <Button onClick={send}>
             <Smartphone size={18} /> Kirim e-struk
           </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function ConnectionModal({
+  currentCode,
+  busy,
+  onClose,
+  onConnect,
+  onDisconnect,
+}: {
+  currentCode: string | null;
+  busy: boolean;
+  onClose: () => void;
+  onConnect: (code: string) => void;
+  onDisconnect: () => void;
+}) {
+  const [code, setCode] = useState(currentCode || makeAccessCode());
+  const valid = code.length >= 6;
+  return (
+    <Modal title="Sinkron antar perangkat" onClose={onClose}>
+      <div className="grid gap-4">
+        <p className="text-sm leading-6 text-slate-600">
+          Pakai kode yang sama di setiap HP. Tidak perlu akun.
+        </p>
+        <Field label="Kode sinkronisasi">
+          <input
+            value={code}
+            onChange={(event) => setCode(normalizeAccessCode(event.target.value))}
+            maxLength={12}
+            className="font-mono uppercase tracking-[0.2em]"
+            placeholder="CONTOH12"
+          />
+        </Field>
+        <button
+          type="button"
+          onClick={() => setCode(makeAccessCode())}
+          className="justify-self-start text-sm font-semibold text-moss hover:text-moss-dark"
+        >
+          Buat kode baru
+        </button>
+        <div className="flex flex-wrap gap-3">
+          <Button disabled={!valid || busy} onClick={() => onConnect(code)}>
+            {busy ? "Menyambungkan..." : "Sambungkan"}
+          </Button>
+          {currentCode && (
+            <Button secondary onClick={onDisconnect}>
+              Pakai data perangkat
+            </Button>
+          )}
         </div>
       </div>
     </Modal>

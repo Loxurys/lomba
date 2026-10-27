@@ -5,22 +5,30 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:api": "tsx watch server/index.ts",
+    "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
+    "start": "node server-dist/index.js",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tailwindcss/vite": "latest",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "lucide-react": "latest",
+    "pg": "^8.23.1",
     "react": "latest",
     "react-dom": "latest",
-    "lucide-react": "latest",
     "tailwindcss": "latest",
-    "@tailwindcss/vite": "latest"
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "latest",
+    "@types/pg": "^8.23.1",
     "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@types/react-dom": "latest",
+    "tsx": "^4.23.15"
   }
 }

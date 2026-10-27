@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
   BarChart3,
   Bell,
   ClipboardList,
+  Cloud,
+  CloudOff,
   LayoutDashboard,
   Menu as MenuIcon,
   Package,
@@ -19,6 +21,13 @@ import {
   load,
   usedStockUnits,
 } from "./lib/app-data";
+import {
+  checkoutRemote,
+  getRemoteState,
+  normalizeAccessCode,
+  saveRemoteState,
+} from "./lib/remote-store";
+import type { AppState } from "./lib/remote-store";
 import type {
   CartItem,
   Page,
@@ -39,6 +48,7 @@ import {
 } from "./components/pages";
 import {
   DeleteModal,
+  ConnectionModal,
   EditStockModal,
   FinanceModal,
   MenuModal,
@@ -76,6 +86,7 @@ function App() {
     | "edit-recipe"
     | "finance"
     | "receipt"
+    | "connection"
     | null
   >(null);
   const [restockTarget, setRestockTarget] = useState<Stock | null>(null);
@@ -89,6 +100,26 @@ function App() {
   } | null>(null);
   const [notice, setNotice] = useState("");
   const [lastSale, setLastSale] = useState<Transaction | null>(null);
+  const [accessCode, setAccessCode] = useState<string | null>(() =>
+    localStorage.getItem("app-access-code"),
+  );
+  const [syncStatus, setSyncStatus] = useState<
+    "local" | "connecting" | "online" | "syncing" | "error"
+  >(accessCode ? "connecting" : "local");
+  const [remoteReady, setRemoteReady] = useState(false);
+  const snapshot = useMemo<AppState>(
+    () => ({ stocks, products, recipes, transactions, demoData }),
+    [stocks, products, recipes, transactions, demoData],
+  );
+
+  const applySnapshot = useCallback((next: AppState) => {
+    setStocks(next.stocks);
+    setProducts(next.products);
+    setRecipes(next.recipes);
+    setTransactions(next.transactions);
+    setDemoData(next.demoData);
+    setCart([]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("app-stocks", JSON.stringify(stocks));
@@ -98,6 +129,56 @@ function App() {
     localStorage.setItem("app-mode", demoData ? "sample" : "empty");
     localStorage.setItem("app-last-sync", new Date().toISOString());
   }, [stocks, products, recipes, transactions, demoData]);
+  useEffect(() => {
+    if (!accessCode) return;
+    let active = true;
+    getRemoteState(accessCode)
+      .then((remote) => {
+        if (!active) return;
+        if (remote) applySnapshot(remote.state);
+        else return saveRemoteState(accessCode, snapshot);
+      })
+      .then(() => {
+        if (active) {
+          setRemoteReady(true);
+          setSyncStatus("online");
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSyncStatus("error");
+          setNotice("Penyimpanan online belum bisa dihubungi");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [accessCode, applySnapshot]);
+  useEffect(() => {
+    if (!accessCode || !remoteReady) return;
+    const timer = window.setTimeout(() => {
+      setSyncStatus("syncing");
+      saveRemoteState(accessCode, snapshot)
+        .then(() => setSyncStatus("online"))
+        .catch(() => setSyncStatus("error"));
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [accessCode, remoteReady, snapshot]);
+  useEffect(() => {
+    if (!accessCode || !remoteReady) return;
+    const interval = window.setInterval(() => {
+      getRemoteState(accessCode)
+        .then((remote) => {
+          if (!remote) return;
+          if (JSON.stringify(remote.state) !== JSON.stringify(snapshot)) {
+            applySnapshot(remote.state);
+            setNotice("Data diperbarui dari perangkat lain");
+          }
+        })
+        .catch(() => setSyncStatus("error"));
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [accessCode, applySnapshot, remoteReady, snapshot]);
   useEffect(() => {
     const channel = new BroadcastChannel("app-sync");
     channel.onmessage = () => {
@@ -111,9 +192,61 @@ function App() {
     return () => channel.close();
   }, []);
   const sync = () => {
-    new BroadcastChannel("app-sync").postMessage("sync");
+    const channel = new BroadcastChannel("app-sync");
+    channel.postMessage("sync");
+    channel.close();
+    if (accessCode) {
+      setSyncStatus("syncing");
+      saveRemoteState(accessCode, snapshot)
+        .then(() => {
+          setSyncStatus("online");
+          setNotice("Data tersimpan online");
+        })
+        .catch(() => {
+          setSyncStatus("error");
+          setNotice("Data tersimpan di perangkat ini");
+        });
+      return;
+    }
     setNotice("Data tersimpan di perangkat ini");
     setTimeout(() => setNotice(""), 2500);
+  };
+  const connect = (rawCode: string) => {
+    const code = normalizeAccessCode(rawCode);
+    if (code.length < 6) {
+      setNotice("Kode minimal 6 karakter");
+      return;
+    }
+    setSyncStatus("connecting");
+    setRemoteReady(false);
+    getRemoteState(code)
+      .then((remote) => {
+        if (remote) {
+          applySnapshot(remote.state);
+          return;
+        }
+        return saveRemoteState(code, snapshot);
+      })
+      .then(() => {
+        localStorage.setItem("app-access-code", code);
+        setAccessCode(code);
+        setRemoteReady(true);
+        setSyncStatus("online");
+        setModal(null);
+        setNotice("Perangkat tersambung");
+      })
+      .catch((error: Error) => {
+        setSyncStatus("error");
+        setNotice(error.message);
+      });
+  };
+  const disconnect = () => {
+    localStorage.removeItem("app-access-code");
+    setAccessCode(null);
+    setRemoteReady(false);
+    setSyncStatus("local");
+    setModal(null);
+    setNotice("Kembali pakai data perangkat ini");
   };
   const switchData = () => {
     const nextDemoData = !demoData;
@@ -186,8 +319,31 @@ function App() {
         grams(stock) >= usedStockUnits(ingredient, stock) * item.quantity
       );
     });
-  const checkout = (method: string) => {
+  const checkout = async (method: string) => {
     if (!cart.length) return;
+    if (accessCode && remoteReady) {
+      setSyncStatus("syncing");
+      try {
+        const result = await checkoutRemote(
+          accessCode,
+          cart.map((item) => ({
+            productId: item.product.id,
+            quantity: item.quantity,
+          })),
+          method,
+        );
+        applySnapshot(result.state);
+        setLastSale(result.sale);
+        setModal("receipt");
+        setSyncStatus("online");
+      } catch (error) {
+        setSyncStatus("error");
+        setNotice(
+          error instanceof Error ? error.message : "Checkout tidak tersimpan.",
+        );
+      }
+      return;
+    }
     if (cart.some((item) => !canFulfill(item))) {
       setNotice("Stok bahan kurang. Cek bahan yang merah dulu.");
       return;
@@ -260,10 +416,18 @@ function App() {
             <p className="text-xs text-slate-500">Senin, 19 Oktober 2026</p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 sm:flex">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{" "}
-              Tersimpan lokal
-            </div>
+            <button
+              onClick={() => setModal("connection")}
+              className={`hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold sm:flex ${syncStatus === "online" ? "bg-emerald-50 text-emerald-700" : syncStatus === "syncing" || syncStatus === "connecting" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}
+              title="Atur sinkron antar perangkat"
+            >
+              {syncStatus === "online" ? <Cloud size={14} /> : <CloudOff size={14} />}
+              {syncStatus === "online"
+                ? "Sinkron online"
+                : syncStatus === "syncing" || syncStatus === "connecting"
+                  ? "Menyinkronkan"
+                  : "Data perangkat"}
+            </button>
             <button
               onClick={switchData}
               className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${demoData ? "border-moss bg-[#edf6f2] text-moss" : "border-line bg-white text-slate-600 hover:bg-slate-50"}`}
@@ -544,6 +708,15 @@ function App() {
       )}
       {modal === "receipt" && lastSale && (
         <ReceiptModal sale={lastSale} onClose={() => setModal(null)} />
+      )}
+      {modal === "connection" && (
+        <ConnectionModal
+          currentCode={accessCode}
+          busy={syncStatus === "connecting"}
+          onClose={() => setModal(null)}
+          onConnect={connect}
+          onDisconnect={disconnect}
+        />
       )}
       {deleteTarget && (
         <DeleteModal

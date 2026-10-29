@@ -60,6 +60,13 @@ import {
   StockModal,
 } from "./components/modals";
 
+
+export const APP_CONFIG = {
+  name: "NAMA TOKO", 
+  tagline: "Dashboard Kasir & Stok",
+  logo: "/favicon.svg",
+};
+
 function App() {
   const [page, setPage] = useState<Page>("cashier");
   const [stocks, setStocks] = useState<Stock[]>(() =>
@@ -483,12 +490,16 @@ function App() {
       {/* Sidebar Desktop */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-white lg:flex">
         <div className="flex items-center gap-3 px-6 py-6 border-b border-line/60">
-          <div className="grid h-10 w-10 place-items-center rounded-xl bg-moss text-white shadow-xs">
-            <ShoppingBasket size={21} />
+          <div className="grid h-10 w-10 place-items-center rounded-xl overflow-hidden bg-moss text-white shadow-xs">
+            {APP_CONFIG.logo ? (
+              <img src={APP_CONFIG.logo} alt={APP_CONFIG.name} className="h-full w-full object-cover" />
+            ) : (
+              <ShoppingBasket size={21} />
+            )}
           </div>
-          <div>
-            <p className="font-bold tracking-tight text-ink">Kasir & UMKM</p>
-            <p className="text-[11px] font-medium text-slate-400">Dashboard Operasional</p>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold tracking-tight text-ink truncate">{APP_CONFIG.name}</p>
+            <p className="text-[11px] font-medium text-slate-400 truncate">{APP_CONFIG.tagline}</p>
           </div>
         </div>
         <nav className="mt-4 space-y-1 px-3">
@@ -735,12 +746,16 @@ function App() {
             <div>
               <div className="flex items-center justify-between pb-5 border-b border-line">
                 <div className="flex items-center gap-2.5">
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-moss text-white">
-                    <ShoppingBasket size={18} />
+                  <div className="grid h-9 w-9 place-items-center rounded-xl overflow-hidden bg-moss text-white">
+                    {APP_CONFIG.logo ? (
+                      <img src={APP_CONFIG.logo} alt={APP_CONFIG.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <ShoppingBasket size={18} />
+                    )}
                   </div>
-                  <div>
-                    <p className="font-bold text-sm text-ink">Kasir & UMKM</p>
-                    <p className="text-[10px] text-slate-400">Menu Utama</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-sm text-ink truncate">{APP_CONFIG.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{APP_CONFIG.tagline}</p>
                   </div>
                 </div>
                 <button

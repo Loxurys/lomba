@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Plus, Smartphone, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Plus, Smartphone, Trash2 } from "lucide-react";
 import type {
   Ingredient,
   IngredientUnit,
@@ -26,25 +26,48 @@ export function StockModal({
   const [unitPrice, setUnitPrice] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
   const [minimum, setMinimum] = useState("");
+  const [error, setError] = useState("");
+
   const price =
     priceMode === "total" && Number(qty)
       ? Number(totalPrice) / Number(qty)
       : Number(unitPrice);
+
   const save = () => {
-    if (!name || !qty || !price) return;
+    if (!name.trim()) {
+      setError("Nama bahan harus diisi.");
+      return;
+    }
+    const q = Number(qty);
+    if (!qty || Number.isNaN(q) || q <= 0) {
+      setError("Jumlah dibeli harus lebih dari 0.");
+      return;
+    }
+    if (!price || Number.isNaN(price) || price < 0) {
+      setError("Harga pembelian harus valid.");
+      return;
+    }
+    setError("");
     onSave({
       id: crypto.randomUUID(),
-      name,
-      quantity: Number(qty),
+      name: name.trim(),
+      quantity: q,
       unit,
       buyPrice: price,
-      minimum: Number(minimum || 0),
+      minimum: Math.max(0, Number(minimum) || 0),
       updatedAt: "Baru saja",
     });
   };
+
   return (
     <Modal title="Tambah bahan baru" onClose={onClose}>
       <div className="grid gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
         <Field label="Nama bahan">
           <input
             value={name}
@@ -56,6 +79,8 @@ export function StockModal({
           <Field label="Jumlah dibeli">
             <input
               type="number"
+              inputMode="decimal"
+              step="any"
               value={qty}
               onChange={(e) => setQty(e.target.value)}
               placeholder="0"
@@ -78,20 +103,23 @@ export function StockModal({
           </p>
           <div className="mb-3 grid grid-cols-2 rounded-xl border border-line p-1 text-sm">
             <button
+              type="button"
               onClick={() => setPriceMode("unit")}
-              className={`rounded-lg px-3 py-2 font-bold ${priceMode === "unit" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 font-bold transition ${priceMode === "unit" ? "bg-moss text-white shadow-xs" : "text-slate-500 hover:text-ink"}`}
             >
               Per satuan
             </button>
             <button
+              type="button"
               onClick={() => setPriceMode("total")}
-              className={`rounded-lg px-3 py-2 font-bold ${priceMode === "total" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 font-bold transition ${priceMode === "total" ? "bg-moss text-white shadow-xs" : "text-slate-500 hover:text-ink"}`}
             >
-              Total satuan
+              Total belanja
             </button>
           </div>
           <input
             type="number"
+            inputMode="numeric"
             value={priceMode === "unit" ? unitPrice : totalPrice}
             onChange={(e) =>
               priceMode === "unit"
@@ -99,10 +127,10 @@ export function StockModal({
                 : setTotalPrice(e.target.value)
             }
             placeholder="0"
-            className="w-full rounded-xl border border-line px-3 py-3 text-sm"
+            className="w-full rounded-xl border border-line bg-white px-3 py-3 text-sm outline-none focus:border-moss"
           />
           {priceMode === "total" && (
-            <p className="mt-2 text-xs text-moss">
+            <p className="mt-2 text-xs font-medium text-moss">
               Harga per {unit}: {price ? rupiah(price) : "-"}
             </p>
           )}
@@ -110,16 +138,21 @@ export function StockModal({
         <Field label="Pengingat stok menipis">
           <input
             type="number"
+            inputMode="decimal"
+            step="any"
             value={minimum}
             onChange={(e) => setMinimum(e.target.value)}
             placeholder="Sisa berapa baru diingatkan"
           />
         </Field>
-        <Button onClick={save}>Simpan bahan & pengeluaran</Button>
+        <Button onClick={save} full>
+          Simpan bahan & pengeluaran
+        </Button>
       </div>
     </Modal>
   );
 }
+
 export function RestockModal({
   stock,
   onClose,
@@ -134,27 +167,48 @@ export function RestockModal({
   const [unitPrice, setUnitPrice] = useState(String(stock.buyPrice));
   const [totalPrice, setTotalPrice] = useState("");
   const [method, setMethod] = useState("Tunai");
+  const [error, setError] = useState("");
+
   const price =
     priceMode === "total" && Number(quantity)
       ? Number(totalPrice) / Number(quantity)
       : Number(unitPrice);
   const total = Number(quantity) * price;
+
   const save = () => {
-    if (!quantity || !price) return;
-    onSave(Number(quantity), price, method);
+    const q = Number(quantity);
+    if (!quantity || Number.isNaN(q) || q <= 0) {
+      setError("Jumlah tambahan stok harus lebih dari 0.");
+      return;
+    }
+    if (!price || Number.isNaN(price) || price < 0) {
+      setError("Harga pembelian harus valid.");
+      return;
+    }
+    setError("");
+    onSave(q, price, method);
   };
+
   return (
-    <Modal title={`Tambah stok ${stock.name}`} onClose={onClose}>
+    <Modal title={`Tambah stok: ${stock.name}`} onClose={onClose}>
       <div className="grid gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
         <div className="rounded-xl bg-slate-50 p-3 text-sm">
-          <p className="text-slate-500">Stok sekarang</p>
-          <p className="mt-1 font-bold">
+          <p className="text-xs text-slate-500">Stok saat ini</p>
+          <p className="mt-0.5 font-bold text-ink">
             {stock.quantity} {stock.unit}
           </p>
         </div>
-        <Field label={`Jumlah dibeli, ${stock.unit}`}>
+        <Field label={`Jumlah dibeli (${stock.unit})`}>
           <input
             type="number"
+            inputMode="decimal"
+            step="any"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="0"
@@ -166,20 +220,23 @@ export function RestockModal({
           </p>
           <div className="mb-3 grid grid-cols-2 rounded-xl border border-line p-1 text-sm">
             <button
+              type="button"
               onClick={() => setPriceMode("unit")}
-              className={`rounded-lg px-3 py-2 font-bold ${priceMode === "unit" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 font-bold transition ${priceMode === "unit" ? "bg-moss text-white shadow-xs" : "text-slate-500 hover:text-ink"}`}
             >
               Per satuan
             </button>
             <button
+              type="button"
               onClick={() => setPriceMode("total")}
-              className={`rounded-lg px-3 py-2 font-bold ${priceMode === "total" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 font-bold transition ${priceMode === "total" ? "bg-moss text-white shadow-xs" : "text-slate-500 hover:text-ink"}`}
             >
-              Total satuan
+              Total belanja
             </button>
           </div>
           <input
             type="number"
+            inputMode="numeric"
             value={priceMode === "unit" ? unitPrice : totalPrice}
             onChange={(e) =>
               priceMode === "unit"
@@ -187,30 +244,32 @@ export function RestockModal({
                 : setTotalPrice(e.target.value)
             }
             placeholder="0"
-            className="w-full rounded-xl border border-line px-3 py-3 text-sm"
+            className="w-full rounded-xl border border-line bg-white px-3 py-3 text-sm outline-none focus:border-moss"
           />
           {priceMode === "total" && (
-            <p className="mt-2 text-xs text-moss">
+            <p className="mt-2 text-xs font-medium text-moss">
               Harga per {stock.unit}: {price ? rupiah(price) : "-"}
             </p>
           )}
         </div>
-        <Field label="Metode pembayaran">
+        <Field label="Metode pembayaran belanja">
           <select value={method} onChange={(e) => setMethod(e.target.value)}>
             <option>Tunai</option>
             <option>QRIS</option>
             <option>Transfer</option>
           </select>
         </Field>
-        <p className="rounded-xl bg-[#edf6f2] px-3 py-2 text-xs leading-5 text-moss">
-          Total satuan {total ? rupiah(total) : rupiah(0)} akan masuk ke
-          pengeluaran.
-        </p>
-        <Button onClick={save}>Tambah stok & catat belanja</Button>
+        <div className="rounded-xl bg-[#edf6f2] px-3.5 py-2.5 text-xs font-semibold text-moss">
+          Total biaya: {total ? rupiah(total) : rupiah(0)} (otomatis dicatat di pengeluaran)
+        </div>
+        <Button onClick={save} full>
+          Tambah stok & catat belanja
+        </Button>
       </div>
     </Modal>
   );
 }
+
 export function EditStockModal({
   stock,
   onClose,
@@ -229,32 +288,61 @@ export function EditStockModal({
     String(stock.buyPrice * stock.quantity),
   );
   const [minimum, setMinimum] = useState(String(stock.minimum));
+  const [error, setError] = useState("");
+
   const price =
     priceMode === "total" && Number(quantity)
       ? Number(totalPrice) / Number(quantity)
       : Number(unitPrice);
+
   const save = () => {
-    if (!name || !quantity || !price) return;
+    if (!name.trim()) {
+      setError("Nama bahan harus diisi.");
+      return;
+    }
+    const q = Number(quantity);
+    if (Number.isNaN(q) || q < 0) {
+      setError("Jumlah stok tidak boleh negatif.");
+      return;
+    }
+    if (Number.isNaN(price) || price < 0) {
+      setError("Harga pembelian harus valid.");
+      return;
+    }
+    setError("");
     onSave({
       ...stock,
-      name,
-      quantity: Number(quantity),
+      name: name.trim(),
+      quantity: q,
       unit,
       buyPrice: price,
-      minimum: Number(minimum || 0),
+      minimum: Math.max(0, Number(minimum) || 0),
       updatedAt: "Baru saja",
     });
   };
+
   return (
     <Modal title="Ubah bahan" onClose={onClose}>
       <div className="grid gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
         <Field label="Nama bahan">
-          <input value={name} onChange={(e) => setName(e.target.value)} />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Contoh: Daging sapi"
+          />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Stok tersedia">
             <input
               type="number"
+              inputMode="decimal"
+              step="any"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
             />
@@ -272,34 +360,37 @@ export function EditStockModal({
         </div>
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            Harga pembelian
+            Harga beli satuan
           </p>
           <div className="mb-3 grid grid-cols-2 rounded-xl border border-line p-1 text-sm">
             <button
+              type="button"
               onClick={() => setPriceMode("unit")}
-              className={`rounded-lg px-3 py-2 font-bold ${priceMode === "unit" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 font-bold transition ${priceMode === "unit" ? "bg-moss text-white shadow-xs" : "text-slate-500 hover:text-ink"}`}
             >
               Per satuan
             </button>
             <button
+              type="button"
               onClick={() => setPriceMode("total")}
-              className={`rounded-lg px-3 py-2 font-bold ${priceMode === "total" ? "bg-moss text-white" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 font-bold transition ${priceMode === "total" ? "bg-moss text-white shadow-xs" : "text-slate-500 hover:text-ink"}`}
             >
-              Total satuan
+              Total nilai stok
             </button>
           </div>
           <input
             type="number"
+            inputMode="numeric"
             value={priceMode === "unit" ? unitPrice : totalPrice}
             onChange={(e) =>
               priceMode === "unit"
                 ? setUnitPrice(e.target.value)
                 : setTotalPrice(e.target.value)
             }
-            className="w-full rounded-xl border border-line px-3 py-3 text-sm"
+            className="w-full rounded-xl border border-line bg-white px-3 py-3 text-sm outline-none focus:border-moss"
           />
           {priceMode === "total" && (
-            <p className="mt-2 text-xs text-moss">
+            <p className="mt-2 text-xs font-medium text-moss">
               Harga per {unit}: {price ? rupiah(price) : "-"}
             </p>
           )}
@@ -307,15 +398,20 @@ export function EditStockModal({
         <Field label="Pengingat stok menipis">
           <input
             type="number"
+            inputMode="decimal"
+            step="any"
             value={minimum}
             onChange={(e) => setMinimum(e.target.value)}
           />
         </Field>
-        <Button onClick={save}>Simpan perubahan</Button>
+        <Button onClick={save} full>
+          Simpan perubahan
+        </Button>
       </div>
     </Modal>
   );
 }
+
 export function DeleteModal({
   target,
   onClose,
@@ -334,22 +430,23 @@ export function DeleteModal({
   return (
     <Modal title={`Hapus ${label}`} onClose={onClose}>
       <p className="text-sm leading-6 text-slate-600">
-        Hapus {target.name}? Data ini gak bisa dibalikin.
+        Yakin ingin menghapus <strong className="text-ink">{target.name}</strong>? Tindakan ini tidak dapat dibatalkan.
       </p>
       <div className="mt-5 flex gap-3">
-        <Button secondary onClick={onClose}>
+        <Button secondary onClick={onClose} full>
           Batal
         </Button>
         <button
           onClick={onDelete}
-          className="rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-700"
+          className="w-full rounded-xl bg-rose-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-rose-700 active:scale-[0.98]"
         >
-          Hapus
+          Ya, Hapus
         </button>
       </div>
     </Modal>
   );
 }
+
 export function MenuModal({
   stocks,
   recipes,
@@ -383,6 +480,8 @@ export function MenuModal({
   const [ingredients, setIngredients] = useState<Ingredient[]>(
     product?.ingredients || [],
   );
+  const [error, setError] = useState("");
+
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeId);
 
   const selectIngredient = (id: string) => {
@@ -392,11 +491,16 @@ export function MenuModal({
   };
 
   const addIngredient = () => {
-    if (!ingredientId || !ingredientQty) return;
+    const q = Number(ingredientQty);
+    if (!ingredientId || !ingredientQty || Number.isNaN(q) || q <= 0) {
+      setError("Jumlah takaran bahan harus lebih dari 0.");
+      return;
+    }
+    setError("");
     setIngredients((current) => {
       const next = {
         stockId: ingredientId,
-        quantity: Number(ingredientQty),
+        quantity: q,
         unit: ingredientUnit,
       };
       return current.some((item) => item.stockId === ingredientId)
@@ -407,28 +511,50 @@ export function MenuModal({
   };
 
   const save = () => {
-    const portions = Number(recipePortions);
-    const finalIngredients =
-      source === "recipe"
-        ? selectedRecipe?.ingredients.map((ingredient) => ({
-            ...ingredient,
-            quantity: ingredient.quantity * portions,
-          })) || []
-        : ingredients;
-
-    if (
-      !name ||
-      !price ||
-      !finalIngredients.length ||
-      finalIngredients.some((ingredient) => ingredient.quantity <= 0)
-    ) {
+    if (!name.trim()) {
+      setError("Nama menu harus diisi.");
+      return;
+    }
+    const p = Number(price);
+    if (!price || Number.isNaN(p) || p < 0) {
+      setError("Harga jual harus diisi angka yang valid.");
       return;
     }
 
+    const portions = Math.max(1, Number(recipePortions) || 1);
+    let finalIngredients: Ingredient[] = [];
+
+    if (source === "recipe") {
+      if (!selectedRecipe) {
+        setError("Pilih resep terlebih dahulu.");
+        return;
+      }
+      if (!selectedRecipe.ingredients.length) {
+        setError("Resep ini belum memiliki bahan. Isi bahan pada menu Resep terlebih dahulu.");
+        return;
+      }
+      finalIngredients = selectedRecipe.ingredients.map((ingredient) => ({
+        ...ingredient,
+        quantity: ingredient.quantity * portions,
+      }));
+    } else {
+      if (!ingredients.length) {
+        setError("Tambahkan minimal 1 bahan untuk menu ini.");
+        return;
+      }
+      finalIngredients = ingredients;
+    }
+
+    if (finalIngredients.some((i) => i.quantity <= 0)) {
+      setError("Semua bahan harus memiliki takaran lebih dari 0.");
+      return;
+    }
+
+    setError("");
     onSave({
       id: product?.id || crypto.randomUUID(),
-      name,
-      price: Number(price),
+      name: name.trim(),
+      price: p,
       recipeId: source === "recipe" ? recipeId : undefined,
       recipePortions: source === "recipe" ? portions : undefined,
       ingredients: finalIngredients,
@@ -438,6 +564,12 @@ export function MenuModal({
   return (
     <Modal title={product ? "Ubah menu" : "Buat menu baru"} onClose={onClose}>
       <div className="grid gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
         <Field label="Nama menu">
           <input
             value={name}
@@ -445,9 +577,10 @@ export function MenuModal({
             placeholder="Contoh: Bakso Telur"
           />
         </Field>
-        <Field label="Harga jual">
+        <Field label="Harga jual (Rp)">
           <input
             type="number"
+            inputMode="numeric"
             value={price}
             onChange={(event) => setPrice(event.target.value)}
             placeholder="0"
@@ -455,26 +588,28 @@ export function MenuModal({
         </Field>
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-            Cara atur bahan
+            Sumber bahan baku
           </p>
           <div className="grid grid-cols-2 rounded-xl border border-line p-1 text-sm">
             <button
+              type="button"
               onClick={() => setSource("recipe")}
-              className={
+              className={`rounded-lg px-3 py-2 font-bold transition ${
                 source === "recipe"
-                  ? "rounded-lg bg-moss px-3 py-2 font-bold text-white"
-                  : "rounded-lg px-3 py-2 font-bold text-slate-500"
-              }
+                  ? "bg-moss text-white shadow-xs"
+                  : "text-slate-500 hover:text-ink"
+              }`}
             >
               Pakai resep
             </button>
             <button
+              type="button"
               onClick={() => setSource("direct")}
-              className={
+              className={`rounded-lg px-3 py-2 font-bold transition ${
                 source === "direct"
-                  ? "rounded-lg bg-moss px-3 py-2 font-bold text-white"
-                  : "rounded-lg px-3 py-2 font-bold text-slate-500"
-              }
+                  ? "bg-moss text-white shadow-xs"
+                  : "text-slate-500 hover:text-ink"
+              }`}
             >
               Racik sendiri
             </button>
@@ -482,37 +617,66 @@ export function MenuModal({
         </div>
 
         {source === "recipe" ? (
-          <div className="rounded-xl bg-slate-50 p-3">
-            <Field label="Pilih resep">
-              <select
-                value={recipeId}
-                onChange={(event) => setRecipeId(event.target.value)}
-              >
-                {recipes.map((recipe) => (
-                  <option key={recipe.id} value={recipe.id}>
-                    {recipe.name} · {recipe.category}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Jumlah porsi resep untuk satu menu">
-              <input
-                type="number"
-                min="1"
-                value={recipePortions}
-                onChange={(event) => setRecipePortions(event.target.value)}
-                placeholder="1"
-              />
-            </Field>
-            <p className="mt-3 text-xs text-slate-500">
-              Takaran bahan mengikuti resep. Buat ubah gram atau satuan, edit
-              resepnya.
-            </p>
+          <div className="rounded-xl bg-slate-50 p-3.5">
+            {recipes.length === 0 ? (
+              <p className="text-xs text-rose-600">
+                Belum ada resep. Buat resep dulu di tab Resep, atau gunakan pilihan "Racik sendiri".
+              </p>
+            ) : (
+              <>
+                <Field label="Pilih resep">
+                  <select
+                    value={recipeId}
+                    onChange={(event) => setRecipeId(event.target.value)}
+                  >
+                    {recipes.map((recipe) => (
+                      <option key={recipe.id} value={recipe.id}>
+                        {recipe.name} ({recipe.category})
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <div className="mt-3">
+                  <Field label="Jumlah porsi resep per sajian menu">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0.1"
+                      step="any"
+                      value={recipePortions}
+                      onChange={(event) => setRecipePortions(event.target.value)}
+                      placeholder="1"
+                    />
+                  </Field>
+                </div>
+                {selectedRecipe && (
+                  <div className="mt-3 border-t border-slate-200/80 pt-2.5">
+                    <p className="text-xs font-bold text-slate-600">Bahan dalam resep ini:</p>
+                    <div className="mt-1.5 space-y-1">
+                      {selectedRecipe.ingredients.map((ing) => {
+                        const st = stocks.find((s) => s.id === ing.stockId);
+                        const mult = Number(recipePortions) || 1;
+                        return (
+                          <div key={ing.stockId} className="flex justify-between text-xs text-slate-600">
+                            <span>{st?.name || "Bahan"}</span>
+                            <span className="font-semibold">
+                              {(ing.quantity * mult).toLocaleString("id-ID")} {ing.unit || st?.unit}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         ) : (
-          <div className="rounded-xl bg-slate-50 p-3">
-            <p className="mb-3 text-sm font-bold">Takaran per porsi</p>
-            <div className="grid grid-cols-[1fr_72px_72px_auto] gap-2">
+          <div className="rounded-xl bg-slate-50 p-3.5">
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Bahan baku langsung
+            </p>
+            <div className="grid grid-cols-[1fr_80px_72px_auto] gap-2">
               <select
                 value={ingredientId}
                 onChange={(event) => selectIngredient(event.target.value)}
@@ -525,9 +689,11 @@ export function MenuModal({
               </select>
               <input
                 type="number"
+                inputMode="decimal"
+                step="any"
                 value={ingredientQty}
                 onChange={(event) => setIngredientQty(event.target.value)}
-                placeholder="Jumlah"
+                placeholder="Takaran"
               />
               <select
                 value={ingredientUnit}
@@ -542,55 +708,58 @@ export function MenuModal({
                 ))}
               </select>
               <button
+                type="button"
                 onClick={addIngredient}
-                className="rounded-lg bg-moss px-3 text-white"
+                className="grid h-11 w-11 place-items-center rounded-xl bg-moss text-white transition active:scale-95"
+                title="Tambah bahan"
               >
                 <Plus size={18} />
               </button>
             </div>
-            {ingredients.map((ingredient) => (
-              <div
-                key={ingredient.stockId}
-                className="mt-2 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm"
-              >
-                <span>
-                  {
-                    stocks.find((stock) => stock.id === ingredient.stockId)
-                      ?.name
-                  }
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">
-                    {ingredient.quantity}{" "}
-                    {recipeUnit(
-                      ingredient,
-                      stocks.find((stock) => stock.id === ingredient.stockId),
-                    )}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setIngredients((current) =>
-                        current.filter(
-                          (item) => item.stockId !== ingredient.stockId,
-                        ),
-                      )
-                    }
-                    className="text-rose-600"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
+            {ingredients.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {ingredients.map((ingredient) => {
+                  const st = stocks.find((stock) => stock.id === ingredient.stockId);
+                  return (
+                    <div
+                      key={ingredient.stockId}
+                      className="flex items-center justify-between rounded-xl bg-white px-3 py-2 text-sm shadow-2xs"
+                    >
+                      <span className="font-medium text-slate-800">{st?.name || "Bahan"}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-moss">
+                          {ingredient.quantity} {recipeUnit(ingredient, st)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setIngredients((current) =>
+                              current.filter(
+                                (item) => item.stockId !== ingredient.stockId,
+                              ),
+                            )
+                          }
+                          className="rounded-lg p-1 text-rose-500 hover:bg-rose-50"
+                          title="Hapus"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
           </div>
         )}
-        <Button onClick={save}>
-          {product ? "Simpan perubahan" : "Simpan menu"}
+        <Button onClick={save} full>
+          {product ? "Simpan perubahan menu" : "Simpan menu baru"}
         </Button>
       </div>
     </Modal>
   );
 }
+
 export function RecipeModal({
   stocks,
   recipe,
@@ -615,6 +784,7 @@ export function RecipeModal({
   const [ingredients, setIngredients] = useState<Ingredient[]>(
     recipe?.ingredients || [],
   );
+  const [error, setError] = useState("");
 
   const selectIngredient = (id: string) => {
     const stock = stocks.find((item) => item.id === id);
@@ -623,10 +793,15 @@ export function RecipeModal({
   };
 
   const addIngredient = () => {
-    if (!ingredientId || !ingredientQty) return;
+    const q = Number(ingredientQty);
+    if (!ingredientId || !ingredientQty || Number.isNaN(q) || q <= 0) {
+      setError("Masukkan takaran bahan lebih dari 0.");
+      return;
+    }
+    setError("");
     const next = {
       stockId: ingredientId,
-      quantity: Number(ingredientQty),
+      quantity: q,
       unit: ingredientUnit,
     };
     setIngredients((current) =>
@@ -653,16 +828,22 @@ export function RecipeModal({
     );
 
   const save = () => {
-    if (
-      !name ||
-      !ingredients.length ||
-      ingredients.some((ingredient) => ingredient.quantity <= 0)
-    ) {
+    if (!name.trim()) {
+      setError("Nama resep harus diisi.");
       return;
     }
+    if (!ingredients.length) {
+      setError("Tambahkan minimal 1 bahan baku untuk resep ini.");
+      return;
+    }
+    if (ingredients.some((ingredient) => ingredient.quantity <= 0)) {
+      setError("Semua takaran bahan harus bernilai lebih dari 0.");
+      return;
+    }
+    setError("");
     onSave({
       id: recipe?.id || crypto.randomUUID(),
-      name,
+      name: name.trim(),
       category,
       ingredients,
     });
@@ -671,6 +852,12 @@ export function RecipeModal({
   return (
     <Modal title={recipe ? "Ubah resep" : "Buat resep baru"} onClose={onClose}>
       <div className="grid gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
         <Field label="Nama resep">
           <input
             value={name}
@@ -678,7 +865,7 @@ export function RecipeModal({
             placeholder="Contoh: Es Teh Manis"
           />
         </Field>
-        <Field label="Jenis resep">
+        <Field label="Kategori menu">
           <select
             value={category}
             onChange={(event) =>
@@ -689,12 +876,11 @@ export function RecipeModal({
             <option>Minuman</option>
           </select>
         </Field>
-        <div className="rounded-xl bg-slate-50 p-3">
-          <p className="mb-1 text-sm font-bold">Bahan dan takaran resep</p>
-          <p className="mb-3 text-xs text-slate-500">
-            Takaran ini dihitung untuk satu porsi resep.
+        <div className="rounded-xl bg-slate-50 p-3.5">
+          <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+            Bahan dan takaran per porsi
           </p>
-          <div className="grid grid-cols-[1fr_72px_72px_auto] gap-2">
+          <div className="grid grid-cols-[1fr_80px_72px_auto] gap-2">
             <select
               value={ingredientId}
               onChange={(event) => selectIngredient(event.target.value)}
@@ -707,9 +893,11 @@ export function RecipeModal({
             </select>
             <input
               type="number"
+              inputMode="decimal"
+              step="any"
               value={ingredientQty}
               onChange={(event) => setIngredientQty(event.target.value)}
-              placeholder="Jumlah"
+              placeholder="Takaran"
             />
             <select
               value={ingredientUnit}
@@ -724,8 +912,10 @@ export function RecipeModal({
               ))}
             </select>
             <button
+              type="button"
               onClick={addIngredient}
-              className="rounded-lg bg-moss px-3 text-white"
+              className="grid h-11 w-11 place-items-center rounded-xl bg-moss text-white transition active:scale-95"
+              title="Tambah bahan"
             >
               <Plus size={18} />
             </button>
@@ -735,11 +925,13 @@ export function RecipeModal({
             return (
               <div
                 key={ingredient.stockId}
-                className="mt-2 grid grid-cols-[1fr_72px_72px_auto] items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm"
+                className="mt-2 grid grid-cols-[1fr_75px_72px_auto] items-center gap-2 rounded-xl bg-white p-2 text-sm shadow-2xs"
               >
-                <span>{stock?.name || "Bahan terhapus"}</span>
+                <span className="font-medium text-slate-800 truncate">{stock?.name || "Bahan"}</span>
                 <input
                   type="number"
+                  inputMode="decimal"
+                  step="any"
                   value={ingredient.quantity || ""}
                   onChange={(event) =>
                     updateIngredient(
@@ -748,7 +940,7 @@ export function RecipeModal({
                       Number(event.target.value),
                     )
                   }
-                  className="w-full rounded-md border border-line px-2 py-1.5"
+                  className="w-full rounded-lg border border-line px-2 py-1.5 text-xs text-center"
                 />
                 <select
                   value={recipeUnit(ingredient, stock)}
@@ -759,7 +951,7 @@ export function RecipeModal({
                       event.target.value as IngredientUnit,
                     )
                   }
-                  className="rounded-md border border-line bg-white px-2 py-1.5"
+                  className="rounded-lg border border-line bg-white px-2 py-1.5 text-xs"
                 >
                   {selectableUnits(stock).map((unit) => (
                     <option key={unit} value={unit}>
@@ -768,6 +960,7 @@ export function RecipeModal({
                   ))}
                 </select>
                 <button
+                  type="button"
                   onClick={() =>
                     setIngredients((current) =>
                       current.filter(
@@ -775,21 +968,23 @@ export function RecipeModal({
                       ),
                     )
                   }
-                  className="text-rose-600"
+                  className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                  title="Hapus bahan"
                 >
-                  <Trash2 size={15} />
+                  <Trash2 size={16} />
                 </button>
               </div>
             );
           })}
         </div>
-        <Button onClick={save}>
-          {recipe ? "Simpan perubahan" : "Simpan resep"}
+        <Button onClick={save} full>
+          {recipe ? "Simpan perubahan resep" : "Simpan resep baru"}
         </Button>
       </div>
     </Modal>
   );
 }
+
 export function FinanceModal({
   onClose,
   onSave,
@@ -801,56 +996,78 @@ export function FinanceModal({
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("Tunai");
+  const [error, setError] = useState("");
+
   const save = () => {
-    if (!title || !amount) return;
+    if (!title.trim()) {
+      setError("Keterangan transaksi harus diisi.");
+      return;
+    }
+    const a = Number(amount);
+    if (!amount || Number.isNaN(a) || a <= 0) {
+      setError("Nominal harus lebih dari 0.");
+      return;
+    }
+    setError("");
     onSave({
       id: crypto.randomUUID(),
       date: new Date().toISOString().slice(0, 10),
       type,
-      title,
-      amount: Number(amount),
+      title: title.trim(),
+      amount: a,
       method,
     });
   };
+
   return (
-    <Modal title="Catat transaksi" onClose={onClose}>
+    <Modal title="Catat transaksi keuangan" onClose={onClose}>
       <div className="grid gap-4">
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
         <Field label="Jenis transaksi">
           <select
             value={type}
             onChange={(e) => setType(e.target.value as "income" | "expense")}
           >
-            <option value="expense">Pengeluaran</option>
-            <option value="income">Pemasukan</option>
+            <option value="expense">Pengeluaran (Biaya)</option>
+            <option value="income">Pemasukan (Lain-lain)</option>
           </select>
         </Field>
         <Field label="Keterangan">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Contoh: Belanja sayur"
+            placeholder="Contoh: Belanja gas LPG / Sayur"
           />
         </Field>
-        <Field label="Nominal">
+        <Field label="Nominal (Rp)">
           <input
             type="number"
+            inputMode="numeric"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0"
           />
         </Field>
-        <Field label="Metode bayar">
+        <Field label="Metode pembayaran">
           <select value={method} onChange={(e) => setMethod(e.target.value)}>
             <option>Tunai</option>
             <option>QRIS</option>
             <option>Transfer</option>
           </select>
         </Field>
-        <Button onClick={save}>Simpan transaksi</Button>
+        <Button onClick={save} full>
+          Simpan transaksi
+        </Button>
       </div>
     </Modal>
   );
 }
+
 export function ReceiptModal({
   sale,
   onClose,
@@ -863,34 +1080,38 @@ export function ReceiptModal({
     const normalized = phone.replace(/^0/, "62").replace(/\D/g, "");
     if (!normalized) return;
     const message = encodeURIComponent(
-      `E-Struk\n${sale.title}\nTotal: ${rupiah(sale.amount)}\nPembayaran: ${sale.method}\nTerima kasih.`,
+      `*E-STRUK PEMBELIAN*\n------------------------\n${sale.title}\nTotal: *${rupiah(sale.amount)}*\nMetode: ${sale.method}\nTanggal: ${sale.date}\n------------------------\nTerima kasih atas kunjungan Anda! 🙏`,
     );
     window.open(`https://wa.me/${normalized}?text=${message}`, "_blank");
   };
+
   return (
     <Modal title="Pembayaran berhasil" onClose={onClose}>
-      <div className="rounded-xl bg-emerald-50 p-4 text-center text-emerald-800">
-        <div className="mx-auto mb-2 grid h-10 w-10 place-items-center rounded-full bg-emerald-600 text-white">
-          <Check size={21} />
+      <div className="rounded-2xl bg-emerald-50 p-5 text-center text-emerald-900">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-600 text-white shadow-sm">
+          <Check size={24} />
         </div>
-        <p className="font-bold">{rupiah(sale.amount)}</p>
-        <p className="mt-1 text-sm">Sudah masuk ke pembukuan dan stok.</p>
+        <p className="text-2xl font-bold tracking-tight text-emerald-950">{rupiah(sale.amount)}</p>
+        <p className="mt-1 text-xs font-semibold text-emerald-700">
+          Metode: {sale.method} · Stok & Pembukuan Otomatis Terpotong
+        </p>
       </div>
       <div className="mt-5">
-        <Field label="Nomor WhatsApp pembeli, opsional">
+        <Field label="Kirim e-Struk via WhatsApp (Opsional)">
           <input
             type="tel"
+            inputMode="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="Contoh: 08123456789"
+            placeholder="Nomor HP WhatsApp (Contoh: 08123456789)"
           />
         </Field>
         <div className="mt-4 flex gap-3">
-          <Button secondary onClick={onClose}>
+          <Button secondary onClick={onClose} full>
             Selesai
           </Button>
-          <Button onClick={send}>
-            <Smartphone size={18} /> Kirim e-struk
+          <Button onClick={send} full>
+            <Smartphone size={18} /> Kirim WhatsApp
           </Button>
         </div>
       </div>
@@ -913,39 +1134,55 @@ export function ConnectionModal({
 }) {
   const [code, setCode] = useState(currentCode || makeAccessCode());
   const valid = code.length >= 6;
+
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (valid && !busy) {
+      onConnect(code);
+    }
+  };
+
   return (
-    <Modal title="Sinkron antar perangkat" onClose={onClose}>
-      <div className="grid gap-4">
-        <p className="text-sm leading-6 text-slate-600">
-          Pakai kode yang sama di setiap HP. Tidak perlu akun.
-        </p>
-        <Field label="Kode sinkronisasi">
+    <Modal title="Sinkronisasi Antar HP & Perangkat" onClose={onClose}>
+      <form onSubmit={handleSubmit} className="grid gap-4">
+        <div className="rounded-xl bg-blue-50/70 p-3.5 text-xs text-blue-900 leading-relaxed">
+          💡 <strong>Cara Pakai:</strong> Masukkan <strong>Kode Toko</strong> yang sama pada HP Kasir, HP Dapur, maupun HP Pemilik. Semua data otomatis tersinkron secara online via database.
+        </div>
+        <Field label="Kode Sinkronisasi (6-12 Karakter)">
           <input
             value={code}
             onChange={(event) => setCode(normalizeAccessCode(event.target.value))}
             maxLength={12}
-            className="font-mono uppercase tracking-[0.2em]"
-            placeholder="CONTOH12"
+            className="font-mono uppercase tracking-[0.2em] font-bold text-center text-lg"
+            placeholder="WARUNG01"
+            autoFocus
           />
         </Field>
-        <button
-          type="button"
-          onClick={() => setCode(makeAccessCode())}
-          className="justify-self-start text-sm font-semibold text-moss hover:text-moss-dark"
-        >
-          Buat kode baru
-        </button>
-        <div className="flex flex-wrap gap-3">
-          <Button disabled={!valid || busy} onClick={() => onConnect(code)}>
-            {busy ? "Menyambungkan..." : "Sambungkan"}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setCode(makeAccessCode())}
+            className="text-xs font-bold text-moss hover:underline"
+          >
+            + Buat kode acak otomatis
+          </button>
+          {currentCode && (
+            <span className="text-xs font-semibold text-emerald-700">
+              ● Aktif: {currentCode}
+            </span>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row">
+          <Button disabled={!valid || busy} onClick={() => onConnect(code)} full>
+            {busy ? "Menyambungkan..." : currentCode === code ? "Segarkan Koneksi" : "Sambungkan Perangkat"}
           </Button>
           {currentCode && (
-            <Button secondary onClick={onDisconnect}>
-              Pakai data perangkat
+            <Button secondary onClick={onDisconnect} full>
+              Putuskan (Gunakan Offline)
             </Button>
           )}
         </div>
-      </div>
+      </form>
     </Modal>
   );
 }

@@ -24,7 +24,7 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const validCode = (code: string) => /^[A-Z0-9]{6,12}$/.test(code);
-const asNumber = (value: unknown) => Number(value);
+const asNumber = (value: unknown) => Number(value) || 0;
 const ingredientBaseUnit = (quantity: number, unit: string) => unit === "kg" ? quantity * 1000 : quantity;
 const stockBaseUnit = (quantity: number, unit: string) => unit === "kg" ? quantity * 1000 : quantity;
 
@@ -54,11 +54,11 @@ async function ensureTables() {
     );
     CREATE TABLE IF NOT EXISTS recipe_ingredients (
       store_code VARCHAR(12) NOT NULL, recipe_id TEXT NOT NULL, stock_id TEXT NOT NULL,
-      quantity NUMERIC NOT NULL CHECK (quantity > 0),
+      quantity NUMERIC NOT NULL CHECK (quantity >= 0),
       unit TEXT NOT NULL CHECK (unit IN ('kg', 'gram', 'pcs')),
       PRIMARY KEY (store_code, recipe_id, stock_id),
       FOREIGN KEY (store_code, recipe_id) REFERENCES recipes(store_code, id) ON DELETE CASCADE,
-      FOREIGN KEY (store_code, stock_id) REFERENCES stock_items(store_code, id) ON DELETE RESTRICT
+      FOREIGN KEY (store_code, stock_id) REFERENCES stock_items(store_code, id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS menu_items (
       store_code VARCHAR(12) NOT NULL REFERENCES app_stores(access_code) ON DELETE CASCADE,
@@ -69,11 +69,11 @@ async function ensureTables() {
     );
     CREATE TABLE IF NOT EXISTS menu_ingredients (
       store_code VARCHAR(12) NOT NULL, menu_id TEXT NOT NULL, stock_id TEXT NOT NULL,
-      quantity NUMERIC NOT NULL CHECK (quantity > 0),
+      quantity NUMERIC NOT NULL CHECK (quantity >= 0),
       unit TEXT NOT NULL CHECK (unit IN ('kg', 'gram', 'pcs')),
       PRIMARY KEY (store_code, menu_id, stock_id),
       FOREIGN KEY (store_code, menu_id) REFERENCES menu_items(store_code, id) ON DELETE CASCADE,
-      FOREIGN KEY (store_code, stock_id) REFERENCES stock_items(store_code, id) ON DELETE RESTRICT
+      FOREIGN KEY (store_code, stock_id) REFERENCES stock_items(store_code, id) ON DELETE CASCADE
     );
     CREATE TABLE IF NOT EXISTS financial_transactions (
       store_code VARCHAR(12) NOT NULL REFERENCES app_stores(access_code) ON DELETE CASCADE,
@@ -83,6 +83,17 @@ async function ensureTables() {
       PRIMARY KEY (store_code, id)
     );
   `);
+
+  try {
+    await pool.query(`
+      ALTER TABLE recipe_ingredients DROP CONSTRAINT IF EXISTS recipe_ingredients_quantity_check;
+      ALTER TABLE recipe_ingredients ADD CONSTRAINT recipe_ingredients_quantity_check CHECK (quantity >= 0);
+      ALTER TABLE menu_ingredients DROP CONSTRAINT IF EXISTS menu_ingredients_quantity_check;
+      ALTER TABLE menu_ingredients ADD CONSTRAINT menu_ingredients_quantity_check CHECK (quantity >= 0);
+    `);
+  } catch {
+    // Constraint relaxation already applied or schema up to date
+  }
 }
 
 function requireDatabase(_request: express.Request, response: express.Response, next: express.NextFunction) {
@@ -100,35 +111,69 @@ function normalizedState(input: unknown): State | null {
 async function writeState(client: PoolClient, code: string, state: State) {
   await client.query(`INSERT INTO app_stores (access_code, demo_data) VALUES ($1, $2)
     ON CONFLICT (access_code) DO UPDATE SET demo_data = EXCLUDED.demo_data, updated_at = NOW()`, [code, state.demoData]);
+
   for (const table of ["financial_transactions", "menu_ingredients", "recipe_ingredients", "menu_items", "recipes", "stock_items"]) {
     await client.query(`DELETE FROM ${table} WHERE store_code = $1`, [code]);
   }
+
+  const validStockIds = new Set<string>();
   for (const stock of state.stocks) {
+    validStockIds.add(stock.id);
     await client.query(`INSERT INTO stock_items (store_code, id, name, quantity, unit, buy_price, minimum_quantity, updated_label)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [code, stock.id, stock.name, asNumber(stock.quantity), stock.unit, asNumber(stock.buyPrice), asNumber(stock.minimum), stock.updatedAt]);
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [code, stock.id, stock.name, Math.max(0, asNumber(stock.quantity)), stock.unit, Math.max(0, asNumber(stock.buyPrice)), Math.max(0, asNumber(stock.minimum)), stock.updatedAt || "Baru saja"]);
   }
+
+  const validRecipeIds = new Set<string>();
   for (const recipe of state.recipes) {
+    validRecipeIds.add(recipe.id);
     await client.query("INSERT INTO recipes (store_code, id, name, category) VALUES ($1, $2, $3, $4)", [code, recipe.id, recipe.name, recipe.category]);
   }
-  for (const recipe of state.recipes) for (const ingredient of recipe.ingredients) {
-    await client.query(`INSERT INTO recipe_ingredients (store_code, recipe_id, stock_id, quantity, unit) VALUES ($1, $2, $3, $4, $5)`, [code, recipe.id, ingredient.stockId, asNumber(ingredient.quantity), ingredient.unit || "gram"]);
+
+  for (const recipe of state.recipes) {
+    const seenStocks = new Set<string>();
+    for (const ingredient of recipe.ingredients) {
+      if (!validStockIds.has(ingredient.stockId) || seenStocks.has(ingredient.stockId)) continue;
+      seenStocks.add(ingredient.stockId);
+      await client.query(`INSERT INTO recipe_ingredients (store_code, recipe_id, stock_id, quantity, unit) VALUES ($1, $2, $3, $4, $5)`,
+        [code, recipe.id, ingredient.stockId, Math.max(0, asNumber(ingredient.quantity)), ingredient.unit || "gram"]);
+    }
   }
+
   for (const product of state.products) {
-    await client.query(`INSERT INTO menu_items (store_code, id, name, price, recipe_id, recipe_portions) VALUES ($1, $2, $3, $4, $5, $6)`, [code, product.id, product.name, asNumber(product.price), product.recipeId || null, product.recipePortions || null]);
+    const recipeId = product.recipeId && validRecipeIds.has(product.recipeId) ? product.recipeId : null;
+    await client.query(`INSERT INTO menu_items (store_code, id, name, price, recipe_id, recipe_portions) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [code, product.id, product.name, Math.max(0, asNumber(product.price)), recipeId, product.recipePortions || null]);
   }
-  for (const product of state.products) for (const ingredient of product.ingredients) {
-    await client.query(`INSERT INTO menu_ingredients (store_code, menu_id, stock_id, quantity, unit) VALUES ($1, $2, $3, $4, $5)`, [code, product.id, ingredient.stockId, asNumber(ingredient.quantity), ingredient.unit || "gram"]);
+
+  for (const product of state.products) {
+    const seenStocks = new Set<string>();
+    for (const ingredient of product.ingredients) {
+      if (!validStockIds.has(ingredient.stockId) || seenStocks.has(ingredient.stockId)) continue;
+      seenStocks.add(ingredient.stockId);
+      await client.query(`INSERT INTO menu_ingredients (store_code, menu_id, stock_id, quantity, unit) VALUES ($1, $2, $3, $4, $5)`,
+        [code, product.id, ingredient.stockId, Math.max(0, asNumber(ingredient.quantity)), ingredient.unit || "gram"]);
+    }
   }
+
   for (const transaction of state.transactions) {
-    await client.query(`INSERT INTO financial_transactions (store_code, id, transaction_date, type, title, amount, method) VALUES ($1, $2, $3, $4, $5, $6, $7)`, [code, transaction.id, transaction.date, transaction.type, transaction.title, asNumber(transaction.amount), transaction.method]);
+    await client.query(`INSERT INTO financial_transactions (store_code, id, transaction_date, type, title, amount, method) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [code, transaction.id, transaction.date, transaction.type, transaction.title, Math.max(0, asNumber(transaction.amount)), transaction.method]);
   }
 }
 
 async function saveState(code: string, state: State) {
   const client = await pool!.connect();
-  try { await client.query("BEGIN"); await writeState(client, code, state); await client.query("COMMIT"); }
-  catch (error) { await client.query("ROLLBACK"); throw error; }
-  finally { client.release(); }
+  try {
+    await client.query("BEGIN");
+    await writeState(client, code, state);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Database saveState error:", error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function readState(client: Pool | PoolClient, code: string) {
@@ -185,7 +230,10 @@ app.get("/api/state/:code", requireDatabase, async (request, response) => {
     if (!result && await migrateLegacyState(code)) result = await readState(pool!, code);
     if (!result) { response.status(404).json({ message: "Data belum dibuat." }); return; }
     response.json(result);
-  } catch { response.status(500).json({ message: "Gagal membaca data." }); }
+  } catch (error) {
+    console.error("Read state error:", error);
+    response.status(500).json({ message: "Gagal membaca data." });
+  }
 });
 
 app.put("/api/state/:code", requireDatabase, async (request, response) => {
@@ -196,7 +244,10 @@ app.put("/api/state/:code", requireDatabase, async (request, response) => {
     await saveState(code, state);
     const saved = await readState(pool!, code);
     response.json({ updatedAt: saved!.updatedAt });
-  } catch { response.status(400).json({ message: "Data tidak bisa disimpan. Cek isi stok atau resep." }); }
+  } catch (error) {
+    console.error("PUT state error:", error);
+    response.status(400).json({ message: error instanceof Error ? error.message : "Data tidak bisa disimpan. Cek isi stok atau resep." });
+  }
 });
 
 app.post("/api/state/:code/checkout", requireDatabase, async (request, response) => {

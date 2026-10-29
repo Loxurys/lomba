@@ -19,6 +19,7 @@
     "pg": "^8.23.1",
     "react": "latest",
     "react-dom": "latest",
+    "serverless-http": "^4.0.0",
     "tailwindcss": "latest",
     "typescript": "latest",
     "vite": "latest"
